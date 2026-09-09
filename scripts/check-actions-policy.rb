@@ -7,6 +7,27 @@ workflow_paths.reject! { |path| path.end_with?("actions-policy.yml") }
 
 findings = []
 parse_errors = []
+tiers = {}
+
+begin
+  policy_path = ".github/ci-policy.yml"
+  if File.file?(policy_path)
+    policy = Psych.safe_load(File.read(policy_path), aliases: true) || {}
+    unless policy.is_a?(Hash) && policy["version"] == 1 && policy["workflows"].is_a?(Hash)
+      findings << [policy_path, "ci-policy.yml must contain version: 1 and a workflows mapping"]
+    else
+      policy["workflows"].each do |path, tier|
+        value = tier.is_a?(Hash) ? tier["tier"] : tier
+        unless %w[fast deep release event].include?(value)
+          findings << [policy_path, "workflow '#{path}' has unknown tier '#{value}'"]
+        end
+        tiers[path] = value
+      end
+    end
+  end
+rescue Psych::Exception => e
+  parse_errors << ".github/ci-policy.yml: #{e.message.lines.first.strip}"
+end
 
 def key(data, name)
   return data[name] if data.is_a?(Hash) && data.key?(name)
@@ -17,6 +38,12 @@ end
 def event_hash(events)
   return {} unless events.is_a?(Hash)
   events
+end
+
+def event_names(events)
+  return events.keys if events.is_a?(Hash)
+  return events if events.is_a?(Array)
+  events.nil? ? [] : [events.to_s]
 end
 
 workflow_paths.each do |path|
@@ -34,9 +61,23 @@ workflow_paths.each do |path|
 
   workflow_name = File.basename(path)
   release_like = workflow_name.match?(/release|publish|sign/i)
+  tier = tiers[path] || if release_like
+    "release"
+  elsif workflow_name.match?(/codeql|fuzz|miri|pty|interop|validation|audit/i)
+    "deep"
+  elsif workflow_name.match?(/ci|build|test/i)
+    "fast"
+  else
+    "event"
+  end
   findings << [path, "missing top-level concurrency"] unless data.key?("concurrency")
 
-  events = event_hash(key(data, "on"))
+  raw_events = key(data, "on")
+  events = event_hash(raw_events)
+  names = event_names(raw_events)
+  if tier == "deep" && (names.include?("push") || names.include?("pull_request"))
+    findings << [path, "deep workflow is triggered by push/pull_request"]
+  end
   if events.key?("push") && events.key?("pull_request")
     push = events["push"]
     pull = events["pull_request"]

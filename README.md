@@ -30,3 +30,17 @@ jobs:
 The caller should trigger on workflow/dependabot configuration changes and on a
 weekly schedule. The reusable workflow checks out the caller repository and
 scans its workflow files.
+
+Repositories with more than one CI lane may add `.github/ci-policy.yml` to make
+the intended routing explicit:
+
+```yaml
+version: 1
+workflows:
+  .github/workflows/ci.yml: fast
+  .github/workflows/codeql.yml: deep
+  .github/workflows/release.yml: release
+```
+
+Supported tiers are `fast`, `deep`, `release`, and `event`. The checker uses the
+declared tier when present and conservative filename inference otherwise.
