@@ -1,0 +1,15 @@
+name: GitHub Actions cost policy
+description: Report or enforce structural cost controls in workflow definitions
+inputs:
+  strict:
+    description: Fail when policy findings are present
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Scan workflow definitions
+      shell: bash
+      env:
+        POLICY_STRICT: ${{ inputs.strict }}
+      run: ruby "$GITHUB_ACTION_PATH/../../../scripts/check-actions-policy.rb"

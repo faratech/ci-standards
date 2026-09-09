@@ -1,0 +1,27 @@
+name: Actions policy
+
+on:
+  workflow_call:
+    inputs:
+      policy_strict:
+        description: Fail when policy findings are present
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Check workflow cost controls
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out caller repository
+        uses: actions/checkout@v4
+
+      - name: Run Actions policy
+        uses: faratech/ci-standards/.github/actions/policy@main
+        with:
+          strict: ${{ inputs.policy_strict }}
